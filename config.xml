@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <hosts>
-	<host name="sender">
+	<host id="sender">
 		<ip>192.168.1.67</ip>
+		<timeout_sec>2.0</timeout_sec>
+		<window_size>8</window_size>
 	</host>
-	<host name="receiver">
+	<host id="receiver">
 		<ip>192.168.1.65</ip>
 	</host>
-	<host name="simulator">
+	<host id="simulator">
 		<ip>192.168.1.70</ip>
 		<ber_rate>10</ber_rate>	
-		<timeout_out_ms>1</timeout_out_ms>
 	</host>
 </hosts>
