@@ -1,15 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <hosts>
 	<host id="sender">
-		<ip>192.168.1.67</ip>
+		<ip>192.168.1.70</ip>
+		<port>7005</port>
 		<timeout_sec>2.0</timeout_sec>
 		<window_size>8</window_size>
+		<send_delay_sec>0.0</send_delay_sec>
 	</host>
 	<host id="receiver">
 		<ip>192.168.1.65</ip>
+		<port>7006</port>
 	</host>
 	<host id="simulator">
-		<ip>192.168.1.70</ip>
-		<ber_rate>10</ber_rate>	
+		<ip>192.168.1.67</ip>
+		<ber_rate>1000</ber_rate>
 	</host>
 </hosts>

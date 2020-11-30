@@ -3,20 +3,18 @@ import os
 import xml.dom.minidom
 import select
 
-SEND_PORT=7005
-RECV_PORT=7006
-PORT_X=8888
-
 # flags
-DATA='0' #equivalent to SEND
-EOT='1'
-ACK='2'
-TIMEOUT='3'
-CONN='4'
+DATA=0 #equivalent to SEND
+EOT=1
+ACK=2
+TIMEOUT=3
+CONN=4
 CMDS=('DATA','EOT','ACK','TIMEOUT','CONN')
 
 BUFFER_SIZE=8192 #8KB
 
+SEND_PORT= 7005
+RECV_PORT= 7006
 SENDER_IP = None
 RECEIVER_IP = None
 SIMULATOR_IP = None
@@ -29,30 +27,49 @@ class SocketHost:
     ip = None
     port = 0
     def __init__(self, socket, ip, port):
-        super(SocketHost, self).__init__()
         self.socket = socket
         self.ip = ip
         self.port = port
+
+class Packet:
+    num = 0 #seqNum or ackNum
+    flag = None 
+    payload = None
+    def __init__(self, flag, num, payload=''):
+        self.flag = flag
+        self.num = num
+        self.payload = payload
+
+    def __eq__(self, other):
+        return other.num == self.num and other.flag == self.flag
+
+def clear(): 
+    if os.name == 'nt': 
+        _ = os.system('cls') 
+    else: 
+        _ = os.system('clear') 
 
 def initConfigs():
     DOMTree = xml.dom.minidom.parse("config.xml")
     root = DOMTree.documentElement
     hosts = root.getElementsByTagName("host")
-    global SENDER_IP
-    global RECEIVER_IP
-    global SIMULATOR_IP
+    global SENDER_IP, RECEIVER_IP, SIMULATOR_IP
     global ber_rate
-    global timeout_sec
+    global timeout_sec, send_delay_sec
+    global window_size
     for host in hosts:
         if host.getAttribute('id') == 'simulator':
             ber_rate = float(host.getElementsByTagName('ber_rate')[0].childNodes[0].data)
             SIMULATOR_IP = host.getElementsByTagName('ip')[0].childNodes[0].data
         if host.getAttribute('id') == 'sender':
             SENDER_IP = host.getElementsByTagName('ip')[0].childNodes[0].data
+            SEND_PORT = int(host.getElementsByTagName('port')[0].childNodes[0].data)
             timeout_sec = float(host.getElementsByTagName('timeout_sec')[0].childNodes[0].data)
+            send_delay_sec = float(host.getElementsByTagName('send_delay_sec')[0].childNodes[0].data)
+            window_size = int(host.getElementsByTagName('window_size')[0].childNodes[0].data)
         if host.getAttribute('id') == 'receiver':
             RECEIVER_IP = host.getElementsByTagName('ip')[0].childNodes[0].data
-    print('Using configs from config.xml\n Sender: {} Simulator: {} Receiver: {}'.format(SENDER_IP, SIMULATOR_IP, RECEIVER_IP))
+            RECV_PORT = int(host.getElementsByTagName('port')[0].childNodes[0].data)
 
 def createUdpSocket(bindPort=None):
     newSocket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -72,7 +89,6 @@ def sendStr(destnSocketHost,str):
             raise RuntimeError("sendStr socket disconnected")
         total_sent += bytes_sent
 
-
 def recvStr(recvSocket):
     chunk, addr = recvSocket.recvfrom(BUFFER_SIZE)
     # unlike tcp recv(), if sendto(10) but we call recvfrom(1), 9bytes are discarded 
@@ -80,12 +96,11 @@ def recvStr(recvSocket):
         raise RuntimeError('recvStr socket disconnected while reading!')
     return chunk.decode()
 
-def sendPacket(destnSocketHost,flag,seqNum,payload=''):
-    seqNumStr = str(seqNum)
-    seqNumLen = '{:0>3}'.format(len(seqNumStr))
-    payloadLen = '{:0>3}'.format(len(payload))
-    packet = str(flag) + str(seqNumLen) + seqNumStr + str(payloadLen) + payload
-    sendStr(destnSocketHost,packet)
+def sendPacket(destnSocketHost,packet):
+    paddedSeqNum = '{:0>4}'.format(str(packet.num))
+    paddedPayloadLen = '{:0>4}'.format(len(packet.payload))
+    packetStr = str(packet.flag) + paddedSeqNum + paddedPayloadLen + packet.payload
+    sendStr(destnSocketHost,packetStr)
 
 def readPacket(readFromSocket,timeout_sec=None):
     flag, seqNum, msg, readyList = TIMEOUT, 0, '', []
@@ -96,19 +111,16 @@ def readPacket(readFromSocket,timeout_sec=None):
     else:
         # nonblocking select
         readyList = select.select([readFromSocket], [], [], timeout_sec)
-    
     if readyList[0]:
-        packet=recvStr(readFromSocket)
+        packetStr=recvStr(readFromSocket)
         cursor = 0;
-        flag =int(packet[cursor])
+        flag =int(packetStr[cursor])
         cursor += 1
-        seqNumLen =int(packet[cursor:cursor+3])
-        cursor += 3
-        seqNum = int(packet[cursor:cursor+seqNumLen])
-        cursor += seqNumLen
-        msgLen=int(packet[cursor:cursor+3])
-        cursor += 3
-        msg=packet[cursor:cursor+msgLen]
-    return (flag, seqNum, msg)
+        seqNum = int(packetStr[cursor:cursor+4])
+        cursor += 4
+        msgLen=int(packetStr[cursor:cursor+4])
+        cursor += 4
+        msg=packetStr[cursor:cursor+msgLen]
+    return Packet(flag, seqNum, msg)
 
 
